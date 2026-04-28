@@ -53,7 +53,7 @@ df = KEGGpathways.get(
     max_retries=3,        # max retries on network / 5xx errors
     n_pathways=None,      # limit to first N pathways (useful for testing)
     force_refresh=False,  # if True, ignore cached pickle and re-fetch
-    no_org_names=True     #Remove the comment suffix ( - organism_name ...) for pathway names
+    no_org_names=True     # remove the comment suffix ( - organism_name ...) from pathway names
     source_col=None,      # copy the specified column as a new column `source` (useful for decoupler)
     target_col=None       # copy the specified column as a new column `target` (useful for decoupler)
 )
