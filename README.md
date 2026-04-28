@@ -5,7 +5,7 @@ A Python package for batch-fetching KEGG pathway gene lists as pandas DataFrames
 ## Installation
 
 ```bash
-pip install -e /path/to/getkeggpathways
+pip install /path/to/getkeggpathways
 ```
 
 Dependencies: `requests`, `pandas`, `tqdm`
