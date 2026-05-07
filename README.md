@@ -1,6 +1,6 @@
 # getKEGGpathways
 
-A Python package for batch-fetching KEGG pathway gene lists as pandas DataFrames.
+A Python package for batch-fetching KEGG pathway gene lists
 
 ## Installation
 
