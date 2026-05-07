@@ -7,15 +7,12 @@ import pandas as pd
 import requests
 from tqdm import tqdm
 
+from typing import Optional, Union, Literal
+
 _BASE_URL = "https://rest.kegg.jp"
 _CACHE_DIR = Path.home() / ".cache" / "getkeggpathways"
 _ORGANISM_CACHE_FILE = _CACHE_DIR / "organisms.txt"
 _CACHE_TTL_DAYS = 30
-
-_DEFAULT_BATCH_SIZE = 10
-_DEFAULT_LATENCY = 0.3
-_DEFAULT_TIMEOUT = 30
-_DEFAULT_MAX_RETRIES = 3
 
 _COLUMNS = ["organism_id", "pathway_id", "pathway_name", "gene_id", "gene_name"]
 
@@ -31,19 +28,53 @@ class KEGGpathways:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def list_organisms(as_dataframe=True, timeout=None, max_retries=None):
+        """Return all available KEGG organisms.
+
+        Parameters
+        ----------
+        as_dataframe : bool, default True
+            If True, return a pandas DataFrame with columns ``["id", "name"]``.
+            If False, return a dict mapping organism_id -> organism_name.
+        timeout : int, optional
+            Seconds before each HTTP request times out.
+        max_retries : int, optional
+            Maximum retries on network / 5xx errors.
+
+        Returns
+        -------
+        pandas.DataFrame or dict
+        """
+        if timeout is None:
+            timeout = _DEFAULT_TIMEOUT
+        if max_retries is None:
+            max_retries = _DEFAULT_MAX_RETRIES
+
+        organisms = KEGGpathways._load_organism_cache(timeout, max_retries)
+        if as_dataframe:
+            df = pd.DataFrame(
+                [(k, v) for k, v in organisms.items()],
+                columns=["id", "name"],
+            )
+            return df
+        return organisms
+
+    @staticmethod
     def get(
         organism="hsa",
         *, # Keyword-only
-        latency=None,
-        batch_size=None,
-        timeout=None,
-        max_retries=None,
-        n_pathways=None,
-        force_refresh=False,
-        no_org_names=True,
-        source_col=None,
-        target_col=None,
-    ):
+        latency: float = 0.3,
+        batch_size: int = 10,
+        timeout: float = 30,
+        max_retries: int = 3,
+        n_pathways: Optional[int] = None,
+        force_refresh: bool = False,
+        no_org_names: bool = True,
+        source_col: Optional[str] = None,
+        target_col: Optional[str] = None,
+        return_dict: bool = False,
+        gene_key: Optional[Literal["gene_name", "gene_id"]] = "gene_name",
+    ) -> Union[pd.DataFrame, dict[str, str]]:
         """Return a DataFrame of KEGG pathway genes for *organism*.
 
         Parameters
@@ -68,15 +99,11 @@ class KEGGpathways:
             Add copy the specified column as a new column `source` (useful for decoupler)
         target_col: str, optional
             Add copy the specified column as a new column `target` (useful for decoupler)
+        return_dict: bool, default: False
+            Return a gseapy-compatible dict with pathway names as keys and list of genes as values
+        gene_key: str, optional
+            Which key to extract as genes upon `return_dict=True`
         """
-        if latency is None:
-            latency = _DEFAULT_LATENCY
-        if batch_size is None:
-            batch_size = _DEFAULT_BATCH_SIZE
-        if timeout is None:
-            timeout = _DEFAULT_TIMEOUT
-        if max_retries is None:
-            max_retries = _DEFAULT_MAX_RETRIES
 
         KEGGpathways._ensure_cache_dir()
 
@@ -90,40 +117,43 @@ class KEGGpathways:
                     # Filter cached result to first n_pathways' worth
                     first_ids = df["pathway_id"].unique()[:n_pathways]
                     df = df[df["pathway_id"].isin(first_ids)]
-                return df
+        else:
+            organisms = KEGGpathways._load_organism_cache(timeout, max_retries)
+            if organism not in organisms:
+                raise ValueError(
+                    f"Unknown organism code: {organism!r}. "
+                    f"Available codes: {', '.join(sorted(organisms)[:20])}..."
+                )
 
-        organisms = KEGGpathways._load_organism_cache(timeout, max_retries)
-        if organism not in organisms:
-            raise ValueError(
-                f"Unknown organism code: {organism!r}. "
-                f"Available codes: {', '.join(sorted(organisms)[:20])}..."
-            )
+            pathways = KEGGpathways._fetch_pathways(organism, timeout, max_retries)
+            if not pathways:
+                return pd.DataFrame(columns=_COLUMNS)
+            if n_pathways and n_pathways > 0:
+                pathways = pathways[0:n_pathways]
 
-        pathways = KEGGpathways._fetch_pathways(organism, timeout, max_retries)
-        if not pathways:
-            return pd.DataFrame(columns=_COLUMNS)
-        if n_pathways and n_pathways > 0:
-            pathways = pathways[0:n_pathways]
+            pathway_ids = [p[0] for p in pathways]
+            all_records = []
+            batches = list(KEGGpathways._batch(pathway_ids, batch_size))
 
-        pathway_ids = [p[0] for p in pathways]
-        all_records = []
-        batches = list(KEGGpathways._batch(pathway_ids, batch_size))
+            for batch in tqdm(batches, desc=f"Fetching {organism} pathways", unit="batch"):
+                text = KEGGpathways._fetch_pathway_details(batch, timeout, max_retries)
+                all_records.extend(KEGGpathways._parse_get_response(text, organism))
+                if len(batch) == batch_size:
+                    time.sleep(latency)
 
-        for batch in tqdm(batches, desc=f"Fetching {organism} pathways", unit="batch"):
-            text = KEGGpathways._fetch_pathway_details(batch, timeout, max_retries)
-            all_records.extend(KEGGpathways._parse_get_response(text, organism))
-            if len(batch) == batch_size:
-                time.sleep(latency)
+            if not all_records:
+                return pd.DataFrame(columns=_COLUMNS)
+            df = pd.DataFrame(all_records, columns=_COLUMNS)
+            if not n_pathways:
+                df.to_pickle(ppath)
 
-        if not all_records:
-            return pd.DataFrame(columns=_COLUMNS)
-        df = pd.DataFrame(all_records, columns=_COLUMNS)
-        if not n_pathways:
-            df.to_pickle(ppath)
-        
-        if no_org_names:
+        if no_org_names: # Remove the suffix for organism names
             df["pathway_name"] = df['pathway_name']\
                 .str.replace(r' - .*', '', regex=True)
+
+        if return_dict:
+            return KEGGpathways._df_to_dict(df, gene_key)
+
         if target_col:
             if target_col in df.columns:
                 df.insert(0, "target", df[target_col])
@@ -135,6 +165,11 @@ class KEGGpathways:
             else:
                 warn(f"column {source_col} not found in data.")
         return df
+    
+    @staticmethod
+    def _df_to_dict(df: pd.DataFrame, gene_col: str = "gene_name") -> dict[str, str]:
+        df["ID"] = [f"{pname} ({pid})" for pname, pid in zip(df["pathway_name"], df["pathway_id"])]
+        return {k: v.to_list() for k, v in df.groupby("ID", observed=True)[gene_col]}
 
     # ------------------------------------------------------------------
     # Cache helpers

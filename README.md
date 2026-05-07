@@ -71,11 +71,15 @@ Use `force_refresh=True` to bypass the cache and re-fetch from the KEGG API.
 To browse all available organism codes:
 
 ```python
-from getKEGGpathways.kegg import _ORGANISM_CACHE_FILE
-import pandas as pd
+from getKEGGpathways import KEGGpathways
 
-df = pd.read_csv(_ORGANISM_CACHE_FILE, sep="\t", names=["id", "name"])
+# Return as a DataFrame (default)
+df = KEGGpathways.list_organisms()
 print(df.head())
+
+# Or return as a dict: {organism_id: organism_name}
+orgs = KEGGpathways.list_organisms(as_dataframe=False)
+print(orgs.get("hsa"))
 ```
 
 Common organisms:

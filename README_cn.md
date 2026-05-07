@@ -71,11 +71,15 @@ df = KEGGpathways.get(
 查看所有支持的物种缩写：
 
 ```python
-from getKEGGpathways.kegg import _ORGANISM_CACHE_FILE
-import pandas as pd
+from getKEGGpathways import KEGGpathways
 
-df = pd.read_csv(_ORGANISM_CACHE_FILE, sep="\t", names=["id", "name"])
+# 以 DataFrame 形式返回（默认）
+df = KEGGpathways.list_organisms()
 print(df.head())
+
+# 或以 dict 形式返回：{organism_id: organism_name}
+orgs = KEGGpathways.list_organisms(as_dataframe=False)
+print(orgs.get("hsa"))
 ```
 
 常用物种：
