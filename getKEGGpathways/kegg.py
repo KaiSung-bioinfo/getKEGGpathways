@@ -28,7 +28,11 @@ class KEGGpathways:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def list_organisms(as_dataframe=True, timeout=None, max_retries=None):
+    def list_organisms(
+        as_dataframe=True,
+        timeout: float = 30,
+        max_retries: int = 3,
+    ):
         """Return all available KEGG organisms.
 
         Parameters
@@ -45,10 +49,6 @@ class KEGGpathways:
         -------
         pandas.DataFrame or dict
         """
-        if timeout is None:
-            timeout = _DEFAULT_TIMEOUT
-        if max_retries is None:
-            max_retries = _DEFAULT_MAX_RETRIES
 
         organisms = KEGGpathways._load_organism_cache(timeout, max_retries)
         if as_dataframe:

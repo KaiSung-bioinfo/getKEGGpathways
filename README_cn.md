@@ -5,7 +5,7 @@
 ## 安装
 
 ```bash
-pip install -e /path/to/getkeggpathways
+pip install git+https://github.com/KaiSung-bioinfo/getKEGGpathways.git
 ```
 
 依赖：`requests`, `pandas`, `tqdm`
