@@ -56,6 +56,8 @@ df = KEGGpathways.get(
     no_org_names=True     # remove the comment suffix ( - organism_name ...) from pathway names
     source_col=None,      # copy the specified column as a new column `source` (useful for decoupler)
     target_col=None       # copy the specified column as a new column `target` (useful for decoupler)
+    return_dict=False,    # whether to return a GSEApy-compatible dict rather than a DataFrame
+    gene_key="gene_name", # Which key ("gene_name" or "gene_id") to extract as list of genes upon `return_dict=True`
 )
 ```
 

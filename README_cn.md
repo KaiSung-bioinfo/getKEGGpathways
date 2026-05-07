@@ -56,6 +56,8 @@ df = KEGGpathways.get(
     no_org_names=True     # 去掉pathway_name内容后面的物种名称
     source_col=None,      # 把指定的列作为“source”列添加到返回数据的左边
     target_col=None       # 把指定的列作为“target”列添加到返回数据的左边
+    return_dict=False,    # 是否返回GSEApy兼容的字典而不是数据框
+    gene_key="gene_name", # 在返回的GSEApy兼容的字典中使用"gene_name"还是"gene_id"
 )
 ```
 
